@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (raw/processed patient data should never be committed)
+data/*
+!data/.gitkeep
+
+# Results / model outputs
+results/*
+!results/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.h5
+
+# Environment / secrets
+.env
+*.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+wandb/

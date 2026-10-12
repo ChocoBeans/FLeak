@@ -2,11 +2,11 @@
 
 *2026-10-08*
 
-Mini-project proposal: federated learning on TCGA Breast Invasive Carcinoma (BRCA) data via cBioPortal, testing whether FL matches centralized performance and how much raw patient data leaks from FL model updates.
+Mini-project proposal: federated learning on Chronic Lymphocytic Leukemia (CLL, Broad, Nat Genet 2022) data via cBioPortal, testing whether FL matches centralized performance and how much raw patient data leaks from FL model updates.
 
 ## Motivation
 
-Federated learning (FL) is increasingly proposed as a way to let multiple institutions collaboratively train models on sensitive biomedical data (genomic, clinical, imaging) without centralizing raw patient records. Published results show real gains from this approach: breast density classification accuracy improved 6% (generalizability up 46%), COVID-19 outcome prediction improved 16–38% at 24h/72h, and rare tumour segmentation improved substantially under FL versus single-site training.
+Federated learning (FL) is increasingly proposed as a way to let multiple institutions collaboratively train models on sensitive biomedical data (genomic, clinical, imaging) without centralizing raw patient records. Published results show real gains from this approach: COVID-19 outcome prediction improved 16–38% at 24h/72h, and rare tumour segmentation improved substantially under FL versus single-site training.
 
 However, FL is frequently described as "privacy-preserving" without that claim being rigorously tested. Reviews of FL frameworks in biomedical research note scarce integration of privacy-preserving techniques (differential privacy, secure aggregation) and a predominant reliance on simpler, less protected architectures — meaning raw data may still be at risk of leaking through shared model updates via gradient inversion or membership inference attacks.
 
@@ -16,27 +16,28 @@ This project has two goals:
 
 ## Dataset & goal
 
-**Dataset:** cBioPortal — TCGA Breast Invasive Carcinoma (BRCA), ~1,100 patients.
+**Dataset:** cBioPortal — Chronic Lymphocytic Leukemia (Broad, Nature Genetics 2022), study ID `cll_broad_2022`. 1,154 patients in the study, 715 with RNA-seq (700 with both RNA-seq and an IGHV label).
 
-**Task:** Binary classification — HER2-positive vs. HER2-negative (or ER-positive vs. ER-negative) breast cancer, using gene expression (RNA-seq) as input features.
+**Task:** Binary classification — IGHV-mutated (M-CLL) vs. IGHV-unmutated (U-CLL) CLL, a lab-measured marker that separates two clinically distinct forms of the disease with different prognosis and treatment. Input is gene expression (RNA-seq, TPM). Classes are roughly balanced (51% mutated).
 
-**Features:** A curated panel of ~50–200 known breast cancer genes (e.g., PAM50 panel or a COSMIC cancer gene census subset), not whole-exome data, to keep preprocessing light.
+**Features:** The ~100 highest-variance genes, log2(TPM+1) transformed, to keep preprocessing light. No curated panel is assumed.
 
-**Node split:** Split patients by tissue source site (TSS) / contributing institution listed in cBioPortal for TCGA-BRCA. This simulates realistic "different hospitals as different nodes," with natural heterogeneity (demographics, sequencing batches) — the non-IID condition FL needs to prove itself against.
+**Node split:** Split patients by contributing cohort (`COHORT`: ICGC, GCLLSG, DFCI, NHLBI, UCSD, MDACC), pooling cohorts under 40 patients into "OTHER". This simulates different institutions as different nodes. Among patients with RNA-seq this gives 4 nodes (n = 289 / 229 / 130 / 52) whose label rates differ (34%–63% mutated) — the non-IID condition FL needs to prove itself against.
 
-## Why BRCA over other cancer types
+## Why CLL over other cancer types
 
-- Largest TCGA cohort, so a multi-institution node split still leaves enough data per node.
-- Well-documented and used in prior FL literature (e.g., breast density classification work reported +6% accuracy, +46% generalizability under FL) — gives a benchmark to compare against and cite.
-- Clean binary label available (HER2 or ER/PR receptor status) — a real clinical task without survival analysis or censored data.
+- Recent (2022), large, and open, with RNA-seq and a clean binary clinical label — no survival analysis or censored data.
+- The label is lab-measured, not derived from the expression data, so the task is not circular.
+- Multiple contributing cohorts give a natural multi-institution split with heterogeneous label rates.
+- Limitation: only four usable nodes after filtering, and no direct FL benchmark from prior work for this dataset.
 
 ## Part 1: Centralized vs. Federated
 
 | Item | Choice |
 | --- | --- |
-| Train | Classifier (logistic regression or small MLP) on curated breast cancer gene panel |
-| Label | HER2 or ER receptor status (binary) |
-| Nodes | Split by TCGA-BRCA contributing institution (TSS) |
+| Train | Classifier (logistic regression or small MLP) on the top-variance gene set |
+| Label | IGHV mutation status (binary) |
+| Nodes | Split by contributing cohort (`COHORT`) |
 | Metrics | Recall (primary), plus precision, F1, AUC-ROC |
 | Comparison | Centralized model vs. FedAvg (Flower) |
 
@@ -60,8 +61,8 @@ Keep the model simple (logistic regression / small MLP) so the threat-model atta
 
 ## Next steps / open questions
 
-- [ ] Decide cBioPortal access route: REST API vs. bulk download
-- [ ] Confirm TSS/institution split has enough patients per node for stable training
+- [x] Decide cBioPortal access route: bulk download (`https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz`)
+- [ ] Confirm cohort split has enough patients per node for stable training (4 nodes, smallest n=52)
 - [ ] Pick final gene panel (PAM50 vs. broader cancer gene census subset)
 - [ ] Choose Flower setup for server-side gradient interception needed for the attack
 - [ ] Frame for week 7 proposal: two research questions — (1) does FL match centralized performance for cancer classification across institutional silos, and (2) how much raw patient data leaks from FL updates, and what's the cost of closing that leak
@@ -70,7 +71,7 @@ Keep the model simple (logistic regression / small MLP) so the threat-model atta
 
 ```
 FLeak/
-├── data/        # raw and preprocessed TCGA-BRCA data from cBioPortal (gitignored)
+├── data/        # raw and preprocessed CLL data from cBioPortal (gitignored)
 ├── fl/          # Flower client/server code
 ├── attacks/     # gradient inversion and membership inference attack implementations
 ├── results/     # metrics output (CSV, gitignored)
@@ -92,7 +93,7 @@ pip install -r requirements.txt
 - [Efficacy of federated learning on genomic data: a study on the UK Biobank and the 1000 Genomes Project](https://pmc.ncbi.nlm.nih.gov/articles/PMC10937521/) — FL applicability for phenotype and ancestry prediction; shows federated models approach centralized performance despite inter-node heterogeneity.
 - [Federated learning frameworks: quality and interoperability for biomedical research](https://pmc.ncbi.nlm.nih.gov/articles/PMC12862364/) — review noting scarce integration of privacy-preserving techniques and reliance on simpler architectures in current FL frameworks.
 - [Federated Learning for the pathogenicity annotation of genetic variants](https://academic.oup.com/bioinformatics/advance-article-pdf/doi/10.1093/bioinformatics/btaf523/64325337/btaf523.pdf) — multi-institutional FL vs. centralized comparison for coding SNVs, non-coding SNVs, and CNVs; found larger centralized-vs-FL divergence for CNVs specifically.
-- [Technical and Legal Aspects of Federated Learning in Bioinformatics: Applications, Challenges and Opportunities](https://arxiv.org/pdf/2503.09649) — documents FL's measured gains in breast density classification, COVID-19 outcome prediction, and rare tumour segmentation.
+- [Technical and Legal Aspects of Federated Learning in Bioinformatics: Applications, Challenges and Opportunities](https://arxiv.org/pdf/2503.09649) — documents FL's measured gains in COVID-19 outcome prediction and rare tumour segmentation.
 - [Eleven quick tips for Biomedical Federated Learning](https://pmc.ncbi.nlm.nih.gov/articles/PMC13496424/) — practical guidance on setting up biomedical FL projects, including use of public data for initial test scenarios.
 - [Federated Learning for Histopathology Image Classification: A Systematic Review](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC12785327/) — PRISMA review of 24 FL studies in histopathology (2020–2025), showing steady growth in that subfield.
 - [pfl-research: simulation framework for accelerating research in Private Federated Learning](https://arxiv.org/pdf/2404.06430) — reference for FL simulation frameworks and private FL research tooling.

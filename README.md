@@ -38,7 +38,7 @@ This project has two goals:
 | Train | Classifier (logistic regression or small MLP) on the top-variance gene set |
 | Label | IGHV mutation status (binary) |
 | Nodes | Split by contributing cohort (`COHORT`) |
-| Metrics | Recall (primary), plus precision, F1, AUC-ROC |
+| Metrics | AUC-ROC (primary), plus accuracy, F1, precision, recall; reported pooled and per node, as mean ± std over seeds |
 | Comparison | Centralized model vs. FedAvg (Flower) |
 
 Keep the model simple (logistic regression / small MLP) so the threat-model attacks in Part 2 are easier to implement and interpret.
@@ -57,13 +57,13 @@ Keep the model simple (logistic regression / small MLP) so the threat-model atta
 - Differential privacy via Opacus — add calibrated noise to gradients, sweep privacy budgets (ε = 1, 3, 8, ∞).
 - Secure aggregation — simulated via Flower's support or a simplified masking scheme, so the server only sees summed updates, never individual client gradients.
 
-**Core result:** Privacy-utility tradeoff curve (recall vs. ε) and leakage-reduction curve (attack success vs. ε). Look for a "knee" in the curve — a privacy budget where attack success drops sharply while accuracy cost stays small.
+**Core result:** Privacy-utility tradeoff curve (AUC-ROC vs. ε) and leakage-reduction curve (attack success vs. ε). Look for a "knee" in the curve — a privacy budget where attack success drops sharply while accuracy cost stays small.
 
 ## Next steps / open questions
 
 - [x] Decide cBioPortal access route: bulk download (`https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz`)
 - [ ] Confirm cohort split has enough patients per node for stable training (4 nodes, smallest n=52)
-- [ ] Pick final gene panel (PAM50 vs. broader cancer gene census subset)
+- [ ] Pick final feature set size (top-N variance genes; try N = 50 / 100 / 500)
 - [ ] Choose Flower setup for server-side gradient interception needed for the attack
 - [ ] Frame for week 7 proposal: two research questions — (1) does FL match centralized performance for cancer classification across institutional silos, and (2) how much raw patient data leaks from FL updates, and what's the cost of closing that leak
 

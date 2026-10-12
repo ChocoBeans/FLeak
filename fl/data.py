@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "cll_broad_2022"
 LABEL_COL = "IGHV_MUTATION_STATUS"  # 'mutated' (M-CLL) -> 1, 'unmutated' (U-CLL) -> 0
@@ -41,8 +42,32 @@ def split_by_site(X, y, cohort):
     return {s: (X[cohort == s], y[cohort == s]) for s in np.unique(cohort)}
 
 
+def make_splits(X, y, cohort, seed=0, test_size=0.2, val_size=0.2):
+    """Shared held-out test set plus per-node train/val sets.
+
+    The test set is stratified by (cohort, label) and held out before the node split, so
+    centralized and federated runs are evaluated on the same patients. The remainder is
+    split per node into train/val (stratified by label). Returns
+    (test, nodes) with test = (X, y, cohort) and nodes = {site: {"train": (X, y), "val": (X, y)}}.
+    """
+    strata = np.char.add(cohort.astype(str), y.astype(str))
+    idx = np.arange(len(y))
+    rest, test = train_test_split(idx, test_size=test_size, stratify=strata, random_state=seed)
+
+    nodes = {}
+    for s in np.unique(cohort):
+        site = rest[cohort[rest] == s]
+        tr, va = train_test_split(site, test_size=val_size, stratify=y[site], random_state=seed)
+        nodes[s] = {"train": (X[tr], y[tr]), "val": (X[va], y[va])}
+    return (X[test], y[test], cohort[test]), nodes
+
+
 if __name__ == "__main__":
     X, y, cohort, _ = load_cll()
     print(f"X={X.shape}  positives={y.sum()} ({y.mean():.1%})")
     for s, (xs, ys) in split_by_site(X, y, cohort).items():
         print(f"  {s:6s} n={len(ys):4d} pos={ys.mean():.2f}")
+    (Xt, yt, ct), nodes = make_splits(X, y, cohort)
+    print(f"test n={len(yt)} pos={yt.mean():.2f}")
+    for s, d in nodes.items():
+        print(f"  {s:6s} train={len(d['train'][1])} val={len(d['val'][1])}")

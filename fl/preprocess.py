@@ -6,6 +6,8 @@ Selection and preprocessing choices are documented in DATA_NOTES.txt.
 """
 import gzip
 import re
+import tarfile
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -17,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data" / "cll_broad_2022"
 PROCESSED_DIR = ROOT / "data" / "processed"
 REFERENCE_DIR = ROOT / "data" / "reference"
+STUDY_URL = "https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz"
 GENCODE_URL = ("https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_19/"
                "gencode.v19.annotation.gtf.gz")
 LABEL_COL = "IGHV_MUTATION_STATUS"  # 'mutated' (M-CLL) -> 1, 'unmutated' (U-CLL) -> 0
@@ -69,6 +72,18 @@ def _excluded_by_annotation():
     return set(ann.index[drop]) | _SEX_NAMES
 
 
+def download_dataset(dest=DATA_DIR.parent):
+    """Download and extract the cll_broad_2022 study from cBioPortal into `dest` if it is missing."""
+    if (dest / DATA_DIR.name).exists():
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "study.tar.gz"
+        urllib.request.urlretrieve(STUDY_URL, archive)
+        with tarfile.open(archive) as tar:
+            tar.extractall(dest, filter="data")
+
+
 def load_patients():
     """data_clinical_patient.txt: one row per patient (label, sex, cohort, ...)."""
     return pd.read_csv(DATA_DIR / "data_clinical_patient.txt", sep="\t", comment="#")
@@ -115,6 +130,7 @@ def build_joined_table(save=True):
     columns of the expression matrix, (3) keep samples whose label is mutated/unmutated.
     Saved to data/processed/samples_joined.csv when `save` is set.
     """
+    download_dataset()
     df = load_samples().merge(load_patients(), on="PATIENT_ID")
     df = df[df["SAMPLE_ID"].isin(load_expression_sample_ids())]
     df = df[df[LABEL_COL].isin(["mutated", "unmutated"])].reset_index(drop=True)

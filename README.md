@@ -16,13 +16,13 @@ This project has two goals:
 
 ## Dataset & goal
 
-**Dataset:** cBioPortal — Chronic Lymphocytic Leukemia (Broad, Nature Genetics 2022), study ID `cll_broad_2022`. 1,154 samples in the study, 715 with RNA-seq; 700 samples (from 696 patients) have both RNA-seq and an IGHV label.
+**Dataset:** cBioPortal — Chronic Lymphocytic Leukemia (Broad, Nature Genetics 2022), study ID `cll_broad_2022`. The study has 1,154 tumour samples, but RNA-seq exists for only a subset; 700 samples (from 696 patients) have both RNA-seq and an IGHV label and are used here.
 
 **Task:** Binary classification — IGHV-mutated (M-CLL) vs. IGHV-unmutated (U-CLL) CLL, a lab-measured marker that separates two clinically distinct forms of the disease with different prognosis and treatment. Input is gene expression (RNA-seq, TPM). Classes are roughly balanced (51% mutated).
 
-**Features:** The 100 highest-variance genes, log2(TPM+1) transformed, after excluding immunoglobulin genes (they encode the label), Y-chromosome/sex-linked genes, pseudogenes, small RNAs and other noisy transcripts (classified with the GENCODE v19 annotation). No curated panel is assumed.
+**Features:** The 100 highest-variance genes, log2(TPM+1) transformed, after excluding immunoglobulin genes (a near-proxy for the label and clone-specific fingerprints), Y-chromosome/sex-linked genes, pseudogenes, small RNAs and other noisy transcripts (classified with the GENCODE v19 annotation). Date-mangled gene symbols from the source file (e.g. `10-Sep`) are restored (`SEPT10`). No curated panel is assumed.
 
-**Node split:** Samples are grouped by contributing cohort (`COHORT`: ICGC, GCLLSG, DFCI, NHLBI, UCSD, MDACC), pooling cohorts under 40 patients into "OTHER". This simulates different institutions as different nodes. This gives 4 nodes (n = 289 / 229 / 130 / 52 samples) whose label rates differ (34%–63% mutated) — the non-IID condition FL needs to prove itself against.
+**Node split:** Samples are grouped by contributing cohort (`COHORT`: ICGC, GCLLSG, DFCI, NHLBI, UCSD, MDACC), pooling the three cohorts with under 40 patients (NHLBI, UCSD, MDACC) into "OTHER". This simulates different institutions as different nodes. This gives 4 nodes (n = 289 / 229 / 130 / 52 samples) whose label rates differ (34%–63% mutated) — the non-IID condition FL needs to prove itself against.
 
 **Train/val/test:** Splits are made at the patient level (a patient's samples never straddle splits). A shared test set (20% of patients, stratified by cohort and label) is held out first and used for both centralized and federated models; the rest is split within each node into train/val (80/20).
 
@@ -65,8 +65,9 @@ Keep the model simple (logistic regression / small MLP) so the threat-model atta
 
 ## Next steps / open questions
 
-- [x] Decide cBioPortal access route: bulk download (`https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz`)
-- [ ] Confirm cohort split has enough patients per node for stable training (4 nodes, smallest n=52)
+- [x] Decide cBioPortal access route: bulk download (`https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz`), fetched automatically by `fl/preprocess.py`
+- [x] Preprocess data into per-node train/val splits and a shared test set (`python -m fl.preprocess`)
+- [ ] Confirm cohort split has enough patients per node for stable training (4 nodes; the smallest, OTHER, has 34 train / 8 val patients and ~10 test)
 - [ ] Pick final feature set size (top-N variance genes; try N = 50 / 100 / 500)
 - [ ] Choose Flower setup for server-side gradient interception needed for the attack
 - [ ] Frame for week 7 proposal: two research questions — (1) does FL match centralized performance for cancer classification across institutional silos, and (2) how much raw patient data leaks from FL updates, and what's the cost of closing that leak
@@ -80,7 +81,7 @@ FLeak/
 │   ├── reference/        # GENCODE v19 gene annotation (downloaded on first run)
 │   └── processed/        # samples_joined.csv, test.csv, nodes/<node>/{train,val}.csv
 ├── fl/
-│   └── preprocess.py     # load raw files, join/filter, gene selection, patient-level splits, standardization
+│   └── preprocess.py     # download/load raw files, join/filter, gene selection, patient-level splits, standardization
 ├── attacks/     # gradient inversion and membership inference attack implementations
 ├── results/     # metrics output (CSV, gitignored)
 ├── notebooks/   # exploratory analysis
@@ -91,6 +92,8 @@ FLeak/
 
 ## Setup
 
+Requires Python 3.11.4 or newer (developed on 3.12).
+
 ```bash
 python -m venv venv
 source venv/bin/activate   # or venv\Scripts\activate on Windows
@@ -100,17 +103,10 @@ pip install -r requirements.txt
 ## Preparing the data
 
 ```bash
-# 1. Download and extract the CLL study from cBioPortal into data/
-cd data
-curl -O https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz
-tar -xzf cll_broad_2022.tar.gz && rm cll_broad_2022.tar.gz
-cd ..
-
-# 2. Join/filter, select genes, split into nodes, and write data/processed/
 python -m fl.preprocess
 ```
 
-The first run also downloads the GENCODE v19 gene annotation (about 38 MB, needs internet) into `data/reference/`. Output:
+This downloads and extracts the CLL study from cBioPortal into `data/cll_broad_2022/` if it isn't there yet (about 136 MB), joins/filters the tables, selects genes, splits into nodes, and writes `data/processed/`. The first run also downloads the GENCODE v19 gene annotation (about 38 MB) into `data/reference/`, so it needs internet. Output:
 
 - `data/processed/samples_joined.csv` — the 700 joined sample/patient rows with RNA-seq and an IGHV label.
 - `data/processed/nodes/<node>/train.csv` and `val.csv` — one folder per FL node (DFCI, GCLLSG, ICGC, OTHER).

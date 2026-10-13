@@ -1,16 +1,22 @@
 DATA SELECTION AND PREPROCESSING NOTES
 Dataset: cBioPortal study cll_broad_2022 (CLL, Broad, Nat Genet 2022)
 Task:    IGHV mutation status (mutated=1 / unmutated=0) from RNA-seq gene expression
-Code:    fl/preprocess.py (reads the raw cBioPortal files, join, filter, feature selection,
-         splits; run `python -m fl.preprocess` to write data/processed/)
+Code:    fl/preprocess.py (downloads and reads the raw cBioPortal files, join, filter, feature
+         selection, splits; run `python -m fl.preprocess` to write data/processed/)
+Seed:    4171 (SEED in fl/preprocess.py)
 
 1. BUILDING THE SAMPLE TABLE
+   - The study archive is downloaded from cBioPortal into data/cll_broad_2022/ on the first run
+     (fl/preprocess.py: download_dataset); nothing is downloaded if the folder already exists.
    - data_clinical_sample.txt (one row per tumour sample) is joined to data_clinical_patient.txt
      (one row per patient) on PATIENT_ID, so each sample carries its patient's label and cohort.
+     The join keeps 1,152 samples (1,147 patients): 2 of the 1,154 samples have no patient row.
    - Samples are then filtered to those present as columns in data_mrna_seq_tpm.txt
-     (RNA-seq is available for only a subset: 715 of 1,154 samples), and then to those with a
-     non-missing IGHV label. The two filters keep the same intersection regardless of order.
-   - Result: 700 samples from 696 patients (4 patients contribute two samples).
+     (RNA-seq is available for only a subset): 714 samples remain. They are then filtered to
+     those with a non-missing IGHV label (mutated/unmutated). The two filters keep the same
+     intersection regardless of order.
+   - Result: 700 samples from 696 patients (4 patients contribute two samples), saved to
+     data/processed/samples_joined.csv. IGHV-mutated 358, unmutated 342.
    - RNA-seq is used even though other assays cover more patients (mutations ~970, copy-number
      ~1,060 of the labelled samples) because gradient inversion needs dense, continuous features
      whose reconstruction can be measured (e.g. cosine similarity).
@@ -58,7 +64,7 @@ Code:    fl/preprocess.py (reads the raw cBioPortal files, join, filter, feature
 3. NODES AND SPLITS
    - FL nodes are split by contributing cohort (COHORT). Cohorts with fewer than 40 patients
      (UCSD, MDACC, NHLBI) are pooled into "OTHER". Nodes: ICGC, GCLLSG, DFCI, OTHER.
-   - make_splits works at the patient level: all samples of a patient go to the same split, so no
+   - make_splits (split_indices) works at the patient level: all samples of a patient go to the same split, so no
      patient appears in both train and test (important for membership inference, where
      "was this patient in the training set?" must have a clean answer).
    - Outputs: data/processed/samples_joined.csv (the joined table), data/processed/nodes/<node>/
@@ -71,8 +77,8 @@ Code:    fl/preprocess.py (reads the raw cBioPortal files, join, filter, feature
      grouping has negligible effect on class balance.
    - Keeping both samples of the 4 repeat patients (rather than one sample per patient) was
      considered and kept. Checked whether the two samples are near-duplicates: they are not.
-     In standardized 100-gene space the within-patient distances are 9.5-12.8 (correlations
-     0.18-0.57), versus a median of 13.8 between random different patients and 8.0 to the
+     In standardized 100-gene space the within-patient distances are 9.4-12.9 (correlations
+     0.14-0.57), versus a median of 13.8 between random different patients and 7.7 to the
      nearest other patient. Each pair is also from different sources (a CRC- sample plus a
      DFCI-/JB- sample), probably different sequencing batches. So a model that memorizes one
      sample reveals little about the other, and keeping both is harmless; this also gives the
@@ -84,18 +90,28 @@ Code:    fl/preprocess.py (reads the raw cBioPortal files, join, filter, feature
      between the two samples for 2 of the 4 patients; the label used (patient-level
      IGHV_MUTATION_STATUS) is unaffected.
 
+   - Resulting sizes (seed 4171), patients/samples in train / val, with the shared test set of
+     140 samples (51% mutated) split across nodes: DFCI 83 / 21, GCLLSG 146 / 37, ICGC 184 / 47,
+     OTHER 34 / 8. Positive (mutated) rates are about 60% (DFCI), 34% (GCLLSG), 63% (ICGC) and
+     35% (OTHER) in every split, so nodes are non-IID while pooled data is balanced.
+
 4. STANDARDIZATION (z-score, training data only)
    - Centralized: mean/std computed from the pooled training data of all nodes
      (standardize_pooled); applied to pooled validation and test data.
    - Federated: each node uses the mean/std of its own training data (standardize_local); test
      patients are scaled with the statistics of their own cohort's node.
    - Neither uses validation or test data to compute statistics, so there is no leakage.
+   - Sanity check (a plain logistic regression on the pooled training data, not FL): test AUC
+     0.97 with pooled scaling and 0.95 with local scaling, so the task is learnable.
 
 LIMITATIONS
    - Centralized and federated runs use different standardization, so a small part of any
      performance gap reflects preprocessing, not federation itself. Local statistics from the
-     smallest node ("OTHER", ~30 training patients) are noisy.
+     smallest node ("OTHER", 34 training samples) are noisy.
    - Variance-based gene selection uses all 700 samples (no labels). It is label-free but not
      strictly restricted to training data.
+   - Gene classification depends on the GENCODE v19 annotation (needs a download on first run);
+     a gene missing from it (303 of 55,238 after the date-symbol fix; none in the selected 100)
+     is kept by default.
    - Only four usable nodes; the test set (~140 samples) is small, so results should be averaged
      over several seeds.

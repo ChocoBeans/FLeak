@@ -85,15 +85,21 @@ Seed:    4171 (SEED in fl/preprocess.py)
      round figure of 700 samples (from 696 patients).
    - For membership inference, membership is counted per patient, not per sample, so a repeat
      patient in a node's training set is one member.
-   - All 4 repeat patients fall in the "OTHER" node (~8 of its 52 samples), so any effect is
-     concentrated there. Sample-level annotations such as TUMOR_MOLECULAR_SUBTYPE disagree
+   - All 4 repeat patients fall in the "OTHER" node (~8 of its 52 samples), and with seed 4171 all
+     four are in its training set (34 samples from 30 patients), so any effect is concentrated
+     there. Sample-level annotations such as TUMOR_MOLECULAR_SUBTYPE disagree
      between the two samples for 2 of the 4 patients; the label used (patient-level
      IGHV_MUTATION_STATUS) is unaffected.
-
-   - Resulting sizes (seed 4171), patients/samples in train / val, with the shared test set of
-     140 samples (51% mutated) split across nodes: DFCI 83 / 21, GCLLSG 146 / 37, ICGC 184 / 47,
-     OTHER 34 / 8. Positive (mutated) rates are about 60% (DFCI), 34% (GCLLSG), 63% (ICGC) and
-     35% (OTHER) in every split, so nodes are non-IID while pooled data is balanced.
+   - Resulting sizes with seed 4171 (samples; test set is the shared 140 samples split by node):
+         node     train  val  test   % mutated (train / val / test)
+         DFCI        83   21    26    60 / 62 / 62
+         GCLLSG     146   37    46    34 / 35 / 35
+         ICGC       184   47    58    63 / 64 / 64
+         OTHER       34    8    10    35 / 38 / 30
+         pooled     447  113   140    51 / 52 / 51
+     (patients: pooled train 443, val 113, test 140; the difference is the repeat patients.)
+     Nodes are non-IID (34% to 63% mutated) while pooled data is balanced. OTHER's validation
+     (8) and test (10) sets are too small for stable per-node numbers.
 
 4. STANDARDIZATION (z-score, training data only)
    - Centralized: mean/std computed from the pooled training data of all nodes

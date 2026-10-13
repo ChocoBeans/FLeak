@@ -24,7 +24,7 @@ This project has two goals:
 
 **Node split:** Samples are grouped by contributing cohort (`COHORT`: ICGC, GCLLSG, DFCI, NHLBI, UCSD, MDACC), pooling the three cohorts with under 40 patients (NHLBI, UCSD, MDACC) into "OTHER". This simulates different institutions as different nodes. This gives 4 nodes (n = 289 / 229 / 130 / 52 samples) whose label rates differ (34%–63% mutated) — the non-IID condition FL needs to prove itself against.
 
-**Train/val/test:** Splits are made at the patient level (a patient's samples never straddle splits). A shared test set (20% of patients, stratified by cohort and label) is held out first and used for both centralized and federated models; the rest is split within each node into train/val (80/20).
+**Train/val/test:** Splits are made at the patient level (a patient's samples never straddle splits). A shared test set (20% of patients, stratified by cohort and label) is held out first and used for both centralized and federated models; the rest is split within each node into train/val (80/20). With seed 4171 the pooled sizes are 447 train / 113 val / 140 test samples (51–52% mutated in each); per-node sizes are in `DATA_NOTES.txt`.
 
 **Preprocessing:** Features are z-scored using training data only — pooled statistics for the centralized model, each node's own statistics for federated learning. Selection and preprocessing choices are documented in `DATA_NOTES.txt`.
 
@@ -67,7 +67,7 @@ Keep the model simple (logistic regression / small MLP) so the threat-model atta
 
 - [x] Decide cBioPortal access route: bulk download (`https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz`), fetched automatically by `fl/preprocess.py`
 - [x] Preprocess data into per-node train/val splits and a shared test set (`python -m fl.preprocess`)
-- [ ] Confirm cohort split has enough patients per node for stable training (4 nodes; the smallest, OTHER, has 34 train / 8 val patients and ~10 test)
+- [ ] Confirm cohort split has enough patients per node for stable training (4 nodes; the smallest, OTHER, has 34 train samples (30 patients), 8 val and 10 test)
 - [ ] Pick final feature set size (top-N variance genes; try N = 50 / 100 / 500)
 - [ ] Choose Flower setup for server-side gradient interception needed for the attack
 - [ ] Frame for week 7 proposal: two research questions — (1) does FL match centralized performance for cancer classification across institutional silos, and (2) how much raw patient data leaks from FL updates, and what's the cost of closing that leak

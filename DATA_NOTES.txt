@@ -97,7 +97,7 @@ Seed:    4171 (SEED in fl/preprocess.py)
          ICGC       184   47    58    63 / 64 / 64
          OTHER       34    8    10    35 / 38 / 30
          pooled     447  113   140    51 / 52 / 51
-     (patients: pooled train 443, val 113, test 140; the difference is the repeat patients.)
+     (patients: pooled train 447, val 113, test 140; the difference is the repeat patients.)
      Nodes are non-IID (34% to 63% mutated) while pooled data is balanced. OTHER's validation
      (8) and test (10) sets are too small for stable per-node numbers.
 

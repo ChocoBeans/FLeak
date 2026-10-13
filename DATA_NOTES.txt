@@ -39,6 +39,20 @@ Code:    fl/data.py
      label).
    - Only 4 patients have two samples and both samples share a label and cohort, so patient-level
      grouping has negligible effect on class balance.
+   - Keeping both samples of the 4 repeat patients (rather than one sample per patient) was
+     considered and kept. Checked whether the two samples are near-duplicates: they are not.
+     In standardized 100-gene space the within-patient distances are 9.5-12.8 (correlations
+     0.18-0.57), versus a median of 13.8 between random different patients and 8.0 to the
+     nearest other patient. Each pair is also from different sources (a CRC- sample plus a
+     DFCI-/JB- sample), probably different sequencing batches. So a model that memorizes one
+     sample reveals little about the other, and keeping both is harmless; this also gives the
+     round figure of 700 samples (from 696 patients).
+   - For membership inference, membership is counted per patient, not per sample, so a repeat
+     patient in a node's training set is one member.
+   - All 4 repeat patients fall in the "OTHER" node (~8 of its 52 samples), so any effect is
+     concentrated there. Sample-level annotations such as TUMOR_MOLECULAR_SUBTYPE disagree
+     between the two samples for 2 of the 4 patients; the label used (patient-level
+     IGHV_MUTATION_STATUS) is unaffected.
 
 4. STANDARDIZATION (z-score, training data only)
    - Centralized: mean/std computed from the pooled training data of all nodes

@@ -1,7 +1,8 @@
 DATA SELECTION AND PREPROCESSING NOTES
 Dataset: cBioPortal study cll_broad_2022 (CLL, Broad, Nat Genet 2022)
 Task:    IGHV mutation status (mutated=1 / unmutated=0) from RNA-seq gene expression
-Code:    fl/data.py
+Code:    fl/preprocess.py (reads the raw cBioPortal files, join, filter, feature selection,
+         splits; run `python -m fl.preprocess` to write data/processed/)
 
 1. BUILDING THE SAMPLE TABLE
    - data_clinical_sample.txt (one row per tumour sample) is joined to data_clinical_patient.txt
@@ -16,12 +17,39 @@ Code:    fl/data.py
 
 2. FEATURE SELECTION
    - Expression is transformed to log2(TPM + 1) because raw TPM is extremely skewed.
+   - Genes are classified with the GENCODE v19 (hg19) annotation, downloaded once to data/reference/
+     (fl/preprocess.py: load_gene_annotation). v19 matches the old gene names in the expression
+     file (e.g. RP11-..., IL8) and covers 99.4% of its genes; current databases (Ensembl lookup,
+     cBioPortal gene reference) lack names like TXLNG2P, which is how a Y-linked gene slipped
+     through an earlier name-based filter.
+   - Gene symbols mangled into dates by a spreadsheet ('10-Sep' = SEPT10, '1-Mar' = MARCH1,
+     '15-Sep' = SEP15, '1-Dec' = DEC1; 26 symbols) are restored before anything else. All 26 are
+     found in GENCODE v19 after the rename. SEPT10 is one of the more label-informative features
+     (correlation about -0.67 with IGHV status). Rows sharing a symbol (2,004 rows, 238 symbols)
+     keep only the first; none of the selected genes is affected.
    - Genes dropped before selection:
-       * immunoglobulin loci (IGH*, IGK*, IGL*, IGJ, ...): the label is IGHV mutation status, so
-         these genes encode the label itself and would make the task partly circular.
-       * sex-linked genes (XIST, RPS4Y1, DDX3Y, KDM5D, UTY, ...): unrelated to the label.
-       * noisy genes: hemoglobin (blood contamination), unannotated/clone-named transcripts
-         (AC/AL/AP..., RP11-...), miRNA/snoRNA/lincRNA.
+       * immunoglobulin loci (IG_* biotypes and IGH*/IGK*/IGL* names): the label is IGHV mutation
+         status, so these genes are a near-proxy for the label (V-gene usage is tied to mutation
+         status, and the reads come from the same rearranged locus) and would make the task partly
+         circular. Light-chain and constant-region genes (IGK*, IGL*) are dropped too: they are less
+         directly tied to the label, but they are clone fingerprints (kappa vs lambda, specific V
+         genes) that would fill about a third of the top 100 (32 of 100 if only IGH* were dropped)
+         and make patients trivially identifiable, which is undesirable for the privacy attacks.
+       * sex-linked genes: every gene on chromosome Y (e.g. RPS4Y1, DDX3Y, KDM5D, TTTY15,
+         TXLNG2P) plus XIST/TSIX. Unrelated to the label. X-linked genes are kept: only 5 of the
+         earlier top 100 were X-linked and removing them did not change how well sex could be
+         predicted.
+       * pseudogenes (all *pseudogene biotypes): their reads are often mismapped from the parent
+         gene, and some are sex-linked (TXLNG2P).
+       * small RNAs by biotype (snRNA, snoRNA, miRNA, misc_RNA, rRNA) and noisy transcripts by
+         name: hemoglobin (blood contamination), clone-named transcripts (AC/AL/AP..., RP11-...),
+         MIR/SNOR/LINC. Protein-coding genes and other lncRNAs with ordinary names are kept
+         (e.g. CLLU1, a known CLL marker, is protein_coding in v19).
+       * non-coding RNA expression is not zero (mean log2(TPM+1) about 3-7 in the earlier top 100),
+         so these were removed for the reasons above, not because they are unexpressed.
+   - Check: after filtering, sex is only weakly predictable from the selected 100 genes
+     (5-fold CV AUC 0.60, versus 0.99 when TXLNG2P was included), and a scan of the 3,000
+     highest-variance remaining genes finds none with a sex-association AUC of 0.80 or more.
    - From the remaining genes the 100 highest-variance genes are kept (label-free selection).
      This is variance-based gene selection, not PCA: features stay as individual genes so
      reconstructed vectors remain interpretable.
@@ -33,6 +61,8 @@ Code:    fl/data.py
    - make_splits works at the patient level: all samples of a patient go to the same split, so no
      patient appears in both train and test (important for membership inference, where
      "was this patient in the training set?" must have a clean answer).
+   - Outputs: data/processed/samples_joined.csv (the joined table), data/processed/nodes/<node>/
+     {train,val}.csv, and data/processed/test.csv (the shared test set, with a NODE column).
    - A shared test set (20% of patients, stratified by cohort and label) is held out before the
      node split so centralized and federated models are evaluated on the same patients.
      The remainder is split within each node into train/val (80/20 of patients, stratified by

@@ -20,7 +20,7 @@ This project has two goals:
 
 **Task:** Binary classification — IGHV-mutated (M-CLL) vs. IGHV-unmutated (U-CLL) CLL, a lab-measured marker that separates two clinically distinct forms of the disease with different prognosis and treatment. Input is gene expression (RNA-seq, TPM). Classes are roughly balanced (51% mutated).
 
-**Features:** The 100 highest-variance genes, log2(TPM+1) transformed, after excluding immunoglobulin genes (they encode the label), sex-linked genes, and noisy/non-coding transcripts. No curated panel is assumed.
+**Features:** The 100 highest-variance genes, log2(TPM+1) transformed, after excluding immunoglobulin genes (they encode the label), Y-chromosome/sex-linked genes, pseudogenes, small RNAs and other noisy transcripts (classified with the GENCODE v19 annotation). No curated panel is assumed.
 
 **Node split:** Samples are grouped by contributing cohort (`COHORT`: ICGC, GCLLSG, DFCI, NHLBI, UCSD, MDACC), pooling cohorts under 40 patients into "OTHER". This simulates different institutions as different nodes. This gives 4 nodes (n = 289 / 229 / 130 / 52 samples) whose label rates differ (34%–63% mutated) — the non-IID condition FL needs to prove itself against.
 
@@ -75,11 +75,16 @@ Keep the model simple (logistic regression / small MLP) so the threat-model atta
 
 ```
 FLeak/
-├── data/        # raw and preprocessed CLL data from cBioPortal (gitignored)
-├── fl/          # Flower client/server code
+├── data/        # raw, reference and processed CLL data (gitignored)
+│   ├── cll_broad_2022/   # raw cBioPortal download
+│   ├── reference/        # GENCODE v19 gene annotation (downloaded on first run)
+│   └── processed/        # samples_joined.csv, test.csv, nodes/<node>/{train,val}.csv
+├── fl/
+│   └── preprocess.py     # load raw files, join/filter, gene selection, patient-level splits, standardization
 ├── attacks/     # gradient inversion and membership inference attack implementations
 ├── results/     # metrics output (CSV, gitignored)
 ├── notebooks/   # exploratory analysis
+├── DATA_NOTES.txt  # data selection and preprocessing decisions, with reasoning
 ├── requirements.txt
 └── README.md
 ```
@@ -91,6 +96,27 @@ python -m venv venv
 source venv/bin/activate   # or venv\Scripts\activate on Windows
 pip install -r requirements.txt
 ```
+
+## Preparing the data
+
+```bash
+# 1. Download and extract the CLL study from cBioPortal into data/
+cd data
+curl -O https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz
+tar -xzf cll_broad_2022.tar.gz && rm cll_broad_2022.tar.gz
+cd ..
+
+# 2. Join/filter, select genes, split into nodes, and write data/processed/
+python -m fl.preprocess
+```
+
+The first run also downloads the GENCODE v19 gene annotation (about 38 MB, needs internet) into `data/reference/`. Output:
+
+- `data/processed/samples_joined.csv` — the 700 joined sample/patient rows with RNA-seq and an IGHV label.
+- `data/processed/nodes/<node>/train.csv` and `val.csv` — one folder per FL node (DFCI, GCLLSG, ICGC, OTHER).
+- `data/processed/test.csv` — the shared held-out test set, with a `NODE` column.
+
+Each split file has `SAMPLE_ID`, `PATIENT_ID`, `COHORT`, `NODE`, `label` (1 = IGHV-mutated) and the unscaled log2(TPM+1) values of the 100 selected genes. Standardization is applied at load time (`standardize_pooled` for the centralized model, `standardize_local` for federated learning). The seed is fixed at 4171 (`SEED` in `fl/preprocess.py`). See `DATA_NOTES.txt` for the reasoning behind each choice.
 
 ## Research referenced
 

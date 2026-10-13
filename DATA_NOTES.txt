@@ -1,0 +1,57 @@
+DATA SELECTION AND PREPROCESSING NOTES
+Dataset: cBioPortal study cll_broad_2022 (CLL, Broad, Nat Genet 2022)
+Task:    IGHV mutation status (mutated=1 / unmutated=0) from RNA-seq gene expression
+Code:    fl/data.py
+
+1. BUILDING THE SAMPLE TABLE
+   - data_clinical_sample.txt (one row per tumour sample) is joined to data_clinical_patient.txt
+     (one row per patient) on PATIENT_ID, so each sample carries its patient's label and cohort.
+   - Samples are then filtered to those present as columns in data_mrna_seq_tpm.txt
+     (RNA-seq is available for only a subset: 715 of 1,154 samples), and then to those with a
+     non-missing IGHV label. The two filters keep the same intersection regardless of order.
+   - Result: 700 samples from 696 patients (4 patients contribute two samples).
+   - RNA-seq is used even though other assays cover more patients (mutations ~970, copy-number
+     ~1,060 of the labelled samples) because gradient inversion needs dense, continuous features
+     whose reconstruction can be measured (e.g. cosine similarity).
+
+2. FEATURE SELECTION
+   - Expression is transformed to log2(TPM + 1) because raw TPM is extremely skewed.
+   - Genes dropped before selection:
+       * immunoglobulin loci (IGH*, IGK*, IGL*, IGJ, ...): the label is IGHV mutation status, so
+         these genes encode the label itself and would make the task partly circular.
+       * sex-linked genes (XIST, RPS4Y1, DDX3Y, KDM5D, UTY, ...): unrelated to the label.
+       * noisy genes: hemoglobin (blood contamination), unannotated/clone-named transcripts
+         (AC/AL/AP..., RP11-...), miRNA/snoRNA/lincRNA.
+   - From the remaining genes the 100 highest-variance genes are kept (label-free selection).
+     This is variance-based gene selection, not PCA: features stay as individual genes so
+     reconstructed vectors remain interpretable.
+   - The README plans to try N = 50 / 100 / 500 genes.
+
+3. NODES AND SPLITS
+   - FL nodes are split by contributing cohort (COHORT). Cohorts with fewer than 40 patients
+     (UCSD, MDACC, NHLBI) are pooled into "OTHER". Nodes: ICGC, GCLLSG, DFCI, OTHER.
+   - make_splits works at the patient level: all samples of a patient go to the same split, so no
+     patient appears in both train and test (important for membership inference, where
+     "was this patient in the training set?" must have a clean answer).
+   - A shared test set (20% of patients, stratified by cohort and label) is held out before the
+     node split so centralized and federated models are evaluated on the same patients.
+     The remainder is split within each node into train/val (80/20 of patients, stratified by
+     label).
+   - Only 4 patients have two samples and both samples share a label and cohort, so patient-level
+     grouping has negligible effect on class balance.
+
+4. STANDARDIZATION (z-score, training data only)
+   - Centralized: mean/std computed from the pooled training data of all nodes
+     (standardize_pooled); applied to pooled validation and test data.
+   - Federated: each node uses the mean/std of its own training data (standardize_local); test
+     patients are scaled with the statistics of their own cohort's node.
+   - Neither uses validation or test data to compute statistics, so there is no leakage.
+
+LIMITATIONS
+   - Centralized and federated runs use different standardization, so a small part of any
+     performance gap reflects preprocessing, not federation itself. Local statistics from the
+     smallest node ("OTHER", ~30 training patients) are noisy.
+   - Variance-based gene selection uses all 700 samples (no labels). It is label-free but not
+     strictly restricted to training data.
+   - Only four usable nodes; the test set (~140 samples) is small, so results should be averaged
+     over several seeds.

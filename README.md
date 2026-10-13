@@ -16,13 +16,17 @@ This project has two goals:
 
 ## Dataset & goal
 
-**Dataset:** cBioPortal — Chronic Lymphocytic Leukemia (Broad, Nature Genetics 2022), study ID `cll_broad_2022`. 1,154 patients in the study, 715 with RNA-seq (700 with both RNA-seq and an IGHV label).
+**Dataset:** cBioPortal — Chronic Lymphocytic Leukemia (Broad, Nature Genetics 2022), study ID `cll_broad_2022`. 1,154 samples in the study, 715 with RNA-seq; 700 samples (from 696 patients) have both RNA-seq and an IGHV label.
 
 **Task:** Binary classification — IGHV-mutated (M-CLL) vs. IGHV-unmutated (U-CLL) CLL, a lab-measured marker that separates two clinically distinct forms of the disease with different prognosis and treatment. Input is gene expression (RNA-seq, TPM). Classes are roughly balanced (51% mutated).
 
-**Features:** The ~100 highest-variance genes, log2(TPM+1) transformed, to keep preprocessing light. No curated panel is assumed.
+**Features:** The 100 highest-variance genes, log2(TPM+1) transformed, after excluding immunoglobulin genes (they encode the label), sex-linked genes, and noisy/non-coding transcripts. No curated panel is assumed.
 
-**Node split:** Split patients by contributing cohort (`COHORT`: ICGC, GCLLSG, DFCI, NHLBI, UCSD, MDACC), pooling cohorts under 40 patients into "OTHER". This simulates different institutions as different nodes. Among patients with RNA-seq this gives 4 nodes (n = 289 / 229 / 130 / 52) whose label rates differ (34%–63% mutated) — the non-IID condition FL needs to prove itself against.
+**Node split:** Samples are grouped by contributing cohort (`COHORT`: ICGC, GCLLSG, DFCI, NHLBI, UCSD, MDACC), pooling cohorts under 40 patients into "OTHER". This simulates different institutions as different nodes. This gives 4 nodes (n = 289 / 229 / 130 / 52 samples) whose label rates differ (34%–63% mutated) — the non-IID condition FL needs to prove itself against.
+
+**Train/val/test:** Splits are made at the patient level (a patient's samples never straddle splits). A shared test set (20% of patients, stratified by cohort and label) is held out first and used for both centralized and federated models; the rest is split within each node into train/val (80/20).
+
+**Preprocessing:** Features are z-scored using training data only — pooled statistics for the centralized model, each node's own statistics for federated learning. Selection and preprocessing choices are documented in `DATA_NOTES.txt`.
 
 ## Why CLL over other cancer types
 

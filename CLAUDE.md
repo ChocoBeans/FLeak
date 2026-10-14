@@ -6,7 +6,7 @@ updates (gradient inversion, membership inference) and what defenses (DP, secure
 
 - `README.md` — project plan, task definition, threat model, setup and run instructions.
 - `DATA_NOTES.txt` — every data selection/preprocessing decision with its reasoning and the
-  limitations. Read it before changing anything in `fl/preprocess.py`; update it when a data
+  limitations. Read it before changing anything in `utils/preprocess.py`; update it when a data
   decision changes.
 
 ## Commands
@@ -14,7 +14,7 @@ updates (gradient inversion, membership inference) and what defenses (DP, secure
 ```bash
 source venv/bin/activate
 pip install -r requirements.txt
-python -m fl.preprocess      # downloads data on first run, writes data/processed/
+python -m utils.preprocess      # downloads data on first run, writes data/processed/
 ```
 
 Python 3.11.4+ (developed on 3.12). First run needs internet (study archive ~136 MB, GENCODE v19
@@ -25,7 +25,7 @@ annotation ~38 MB into `data/reference/`). `data/` and `results/` are gitignored
 ### Done
 - Dataset chosen: CLL (Broad, Nat Genet 2022). Task: IGHV mutated (1) vs unmutated (0) from gene
   expression. Replaced the original TCGA-BRCA plan (no ER/HER2 labels in that study).
-- `fl/preprocess.py`: auto-download, join sample + patient tables, filter to samples in the
+- `utils/preprocess.py`: auto-download, join sample + patient tables, filter to samples in the
   expression matrix and with an IGHV label (700 samples, 696 patients), gene filtering with
   GENCODE v19 (drops chrY/XIST, pseudogenes, Ig loci, small RNAs, noisy transcripts), restores
   date-mangled symbols (`10-Sep` -> `SEPT10`), top-100 variance genes, log2(TPM+1).
@@ -33,7 +33,8 @@ annotation ~38 MB into `data/reference/`). `data/` and `results/` are gitignored
   shared 20% test set, seed 4171. Outputs in `data/processed/` (`nodes/<node>/{train,val}.csv`,
   `test.csv`, `samples_joined.csv`) were verified against the raw files.
 - `standardize_pooled` (centralized) and `standardize_local` (federated) implemented in
-  `fl/preprocess.py`; applied at load time, not stored in the CSVs.
+  `utils/standardization.py`; applied at load time, not stored in the CSVs (which hold unscaled
+  log2(TPM+1) values).
 - README and DATA_NOTES are up to date with the above.
 
 ### To do
@@ -64,5 +65,5 @@ annotation ~38 MB into `data/reference/`). `data/` and `results/` are gitignored
 - OTHER (UCSD + MDACC + NHLBI) is tiny: 34 train / 8 val / 10 test samples, so its per-node
   metrics are noisy. GCLLSG (34% mutated) differs most from the pooled 51%.
 - Seeds should vary model init and batch order; the data split uses `SEED = 4171` in
-  `fl/preprocess.py`. Variation from different splits is not captured unless added.
+  `utils/preprocess.py`. Variation from different splits is not captured unless added.
 - Gene variance selection uses all 700 samples (label-free); noted as a limitation.

@@ -1,6 +1,6 @@
 """Load the raw CLL files, join/filter them, select features, and split into cohort nodes.
 
-`python -m fl.preprocess` writes data/processed/samples_joined.csv, per-node
+`python -m utils.preprocess` writes data/processed/samples_joined.csv, per-node
 data/processed/nodes/<node>/{train,val}.csv and the shared data/processed/test.csv.
 Selection and preprocessing choices are documented in DATA_NOTES.txt.
 """
@@ -49,6 +49,7 @@ def load_gene_annotation():
         REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
         gtf = REFERENCE_DIR / "gencode.v19.annotation.gtf.gz"
         if not gtf.exists():
+            print(f"Downloading {GENCODE_URL} (~38 MB) ...", flush=True)
             urllib.request.urlretrieve(GENCODE_URL, gtf)
         rows = []
         with gzip.open(gtf, "rt") as f:
@@ -79,6 +80,7 @@ def download_dataset(dest=DATA_DIR.parent):
     dest.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "study.tar.gz"
+        print(f"Downloading {STUDY_URL} (~136 MB) ...", flush=True)
         urllib.request.urlretrieve(STUDY_URL, archive)
         with tarfile.open(archive) as tar:
             tar.extractall(dest, filter="data")
@@ -212,41 +214,13 @@ def make_splits(X, y, cohort, patient, seed=SEED, test_size=0.2, val_size=0.2):
     return (X[test_idx], y[test_idx], cohort[test_idx]), nodes
 
 
-def _zscore(X, mu, sd):
-    return ((X - mu) / sd).astype(np.float32)
-
-
-def standardize_pooled(test, nodes):
-    """Centralized setting: z-score every split with mean/std of the pooled training data."""
-    Xtr = np.vstack([d["train"][0] for d in nodes.values()])
-    mu, sd = Xtr.mean(0), Xtr.std(0) + 1e-8
-    nodes = {s: {k: (_zscore(Xs, mu, sd), ys) for k, (Xs, ys) in d.items()} for s, d in nodes.items()}
-    return (_zscore(test[0], mu, sd), *test[1:]), nodes
-
-
-def standardize_local(test, nodes):
-    """Federated setting: each node z-scores with the mean/std of its own training data.
-
-    Each test patient is scaled with the statistics of their own cohort's node, as if the
-    global model were evaluated at that site.
-    """
-    out, Xte = {}, test[0].copy()
-    for s, d in nodes.items():
-        Xtr = d["train"][0]
-        mu, sd = Xtr.mean(0), Xtr.std(0) + 1e-8
-        out[s] = {k: (_zscore(Xs, mu, sd), ys) for k, (Xs, ys) in d.items()}
-        m = test[2] == s
-        Xte[m] = _zscore(test[0][m], mu, sd)
-    return (Xte.astype(np.float32), *test[1:]), out
-
-
 def export_processed(n_genes=100, min_site_size=40, seed=SEED):
     """Write samples_joined.csv, nodes/<node>/{train,val}.csv and the pooled test.csv.
 
     Each split file has SAMPLE_ID, PATIENT_ID, COHORT (original), NODE, label (1 = IGHV-mutated)
     and the unscaled log2(TPM+1) values of the selected genes. test.csv is the shared held-out
     test set for all nodes (NODE says which cohort each patient belongs to). Standardization is
-    not applied here (see standardize_pooled / standardize_local).
+    not applied here (see utils/standardization.py).
     """
     df = build_joined_table(save=True)
     feats = _top_variance_expression(df["SAMPLE_ID"], n_genes)

@@ -65,8 +65,8 @@ Keep the model simple (logistic regression / small MLP) so the threat-model atta
 
 ## Next steps / open questions
 
-- [x] Decide cBioPortal access route: bulk download (`https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz`), fetched automatically by `fl/preprocess.py`
-- [x] Preprocess data into per-node train/val splits and a shared test set (`python -m fl.preprocess`)
+- [x] Decide cBioPortal access route: bulk download (`https://datahub.assets.cbioportal.org/cll_broad_2022.tar.gz`), fetched automatically by `utils/preprocess.py`
+- [x] Preprocess data into per-node train/val splits and a shared test set (`python -m utils.preprocess`)
 - [ ] Confirm cohort split has enough patients per node for stable training (4 nodes; the smallest, OTHER, has 34 train samples (30 patients), 8 val and 10 test)
 - [ ] Pick final feature set size (top-N variance genes; try N = 50 / 100 / 500)
 - [ ] Choose Flower setup for server-side gradient interception needed for the attack
@@ -80,8 +80,10 @@ FLeak/
 │   ├── cll_broad_2022/   # raw cBioPortal download
 │   ├── reference/        # GENCODE v19 gene annotation (downloaded on first run)
 │   └── processed/        # samples_joined.csv, test.csv, nodes/<node>/{train,val}.csv
-├── fl/
-│   └── preprocess.py     # download/load raw files, join/filter, gene selection, patient-level splits, standardization
+├── utils/
+│   ├── preprocess.py     # download/load raw files, join/filter, gene selection, patient-level splits
+│   └── standardization.py  # pooled (centralized) and local (federated) z-scoring from training data
+├── fl/          # Flower client/server code
 ├── attacks/     # gradient inversion and membership inference attack implementations
 ├── results/     # metrics output (CSV, gitignored)
 ├── notebooks/   # exploratory analysis
@@ -103,7 +105,7 @@ pip install -r requirements.txt
 ## Preparing the data
 
 ```bash
-python -m fl.preprocess
+python -m utils.preprocess   # run from the repo root
 ```
 
 This downloads and extracts the CLL study from cBioPortal into `data/cll_broad_2022/` if it isn't there yet (about 136 MB), joins/filters the tables, selects genes, splits into nodes, and writes `data/processed/`. The first run also downloads the GENCODE v19 gene annotation (about 38 MB) into `data/reference/`, so it needs internet. Output:
@@ -112,7 +114,21 @@ This downloads and extracts the CLL study from cBioPortal into `data/cll_broad_2
 - `data/processed/nodes/<node>/train.csv` and `val.csv` — one folder per FL node (DFCI, GCLLSG, ICGC, OTHER).
 - `data/processed/test.csv` — the shared held-out test set, with a `NODE` column.
 
-Each split file has `SAMPLE_ID`, `PATIENT_ID`, `COHORT`, `NODE`, `label` (1 = IGHV-mutated) and the unscaled log2(TPM+1) values of the 100 selected genes. Standardization is applied at load time (`standardize_pooled` for the centralized model, `standardize_local` for federated learning). The seed is fixed at 4171 (`SEED` in `fl/preprocess.py`). See `DATA_NOTES.txt` for the reasoning behind each choice.
+Each split file has `SAMPLE_ID`, `PATIENT_ID`, `COHORT`, `NODE`, `label` (1 = IGHV-mutated) and the unscaled log2(TPM+1) values of the 100 selected genes. Standardization is applied at load time (`standardize_pooled` for the centralized model, `standardize_local` for federated learning). The seed is fixed at 4171 (`SEED` in `utils/preprocess.py`). See `DATA_NOTES.txt` for the reasoning behind each choice.
+
+## Using the data in code
+
+```python
+from utils.preprocess import load_cll, make_splits
+from utils.standardization import standardize_pooled, standardize_local
+
+X, y, node, patient, genes = load_cll()                # unscaled log2(TPM+1), 100 genes
+test, nodes = make_splits(X, y, node, patient)         # same split as data/processed/
+test, nodes = standardize_pooled(test, nodes)          # centralized; or standardize_local for FL
+# nodes["ICGC"]["train"] -> (X, y); test -> (X, y, node_per_sample)
+```
+
+There is no reader for the CSVs in `data/processed/` yet; they are the shareable copy of the same split (seed 4171).
 
 ## Research referenced
 

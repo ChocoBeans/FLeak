@@ -86,13 +86,16 @@ FLeak/
 │   ├── train.py          # shared training epoch and evaluation (stub)
 │   └── dataset.py        # reads data/processed/ into arrays (stub)
 ├── models/
-│   └── nets.py           # logistic regression and small MLP, shared by both runs (stub)
+│   ├── logistic_regression.py  # logistic regression (one linear layer, outputs a logit)
+│   ├── mlp.py            # small MLP (100 -> 32 -> 1, outputs a logit)
+│   └── __init__.py       # build_model("logreg" | "mlp", n_features)
 ├── centralized/
 │   └── run.py            # centralized baseline on pooled training data (stub)
 ├── federated/
-│   ├── client.py         # Flower client (stub)
-│   ├── strategy.py       # FedAvg and the hook exposing per-client updates to the attacks (stub)
-│   └── run.py            # simulation across the 4 nodes (stub)
+│   ├── pyproject.toml    # Flower app config (imported from the quickstart-pytorch example)
+│   └── task.py, client_app.py, server_app.py, custom_strategy.py
+│                         # imported Flower quickstart example (CIFAR-10 CNN template, not yet adapted to CLL data);
+│                         # custom_strategy.py is kept for reference only
 ├── attacks/     # gradient inversion and membership inference attack implementations
 ├── results/     # metrics output (CSV, gitignored); centralized/ and federated/ subfolders
 ├── notebooks/   # exploratory analysis

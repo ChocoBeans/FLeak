@@ -25,15 +25,25 @@ annotation ~38 MB into `data/reference/`). `data/` and `results/` are gitignored
 - `utils/preprocess.py` — download, join/filter, gene selection, splits, CSV export (`python -m utils.preprocess`).
 - `utils/standardization.py` — `standardize_pooled` / `standardize_local`.
 - `utils/train.py`, `utils/dataset.py` — shared training/evaluation and CSV reader (stubs, no code yet).
-- `models/nets.py` — logistic regression and small MLP (stub).
+- `models/logistic_regression.py`, `models/mlp.py` — the two models (raw-logit output, train with
+  `BCEWithLogitsLoss`); `models.build_model("logreg" | "mlp", n_features)` builds either. Logistic
+  regression is the main model; the MLP is the comparison.
 - `centralized/run.py` — centralized baseline (stub).
-- `federated/{client,strategy,run}.py` — Flower client, FedAvg + per-client update hook, simulation (stubs).
+- `federated/{task,client_app,server_app,custom_strategy}.py` + `federated/pyproject.toml` — imported
+  Flower quickstart-pytorch example (CIFAR-10 CNN, FedAdagrad, W&B logging), only the import paths and
+  the `pyproject.toml` component paths changed (`pytorchexample.` -> `federated.`). It is a template:
+  it still uses CIFAR-10. `custom_strategy.py` is kept for reference only (unrelated to the project for
+  now; edit it later when deeper into the project). The earlier stub files `client.py`, `strategy.py`,
+  `run.py` were deleted as redundant. `flwr[simulation]` and `torch` are in `requirements.txt` and match `federated/pyproject.toml`; keep
+  the two in sync. The vision/W&B packages (`flwr-datasets`, `torchvision`, `wandb`) were left out
+  on purpose (no CNNs), so `task.py` and `custom_strategy.py` do not import until they are adapted
+  (they use `datasets`, `flwr_datasets`, `torchvision`, `wandb`).
 - `attacks/`, `notebooks/`, `results/` — empty so far. Results go to `results/centralized/` and `results/federated/`.
 - `data/` — raw study, GENCODE reference and `processed/` outputs (all gitignored).
 
 Dependency direction: `utils` <- `models` <- `centralized`, `federated`, `attacks`. `centralized` and
 `federated` must not import each other; both use the same `utils.train` and the same hyperparameters.
-Run modules from the repo root (`python -m centralized.run`, `python -m federated.run`).
+Run modules from the repo root (`python -m centralized.run`); the Flower app in `federated/` is launched with `flwr run`.
 
 In code: `from utils.preprocess import load_cll, make_splits` and
 `from utils.standardization import standardize_pooled, standardize_local`. There is no reader for the
@@ -54,13 +64,12 @@ In code: `from utils.preprocess import load_cll, make_splits` and
 - `standardize_pooled` (centralized) and `standardize_local` (federated) implemented in
   `utils/standardization.py`; applied at load time, not stored in the CSVs (which hold unscaled
   log2(TPM+1) values).
+- Models written in PyTorch (so Flower, Opacus and the attacks can reuse them): logistic regression
+  and a small MLP, one file each in `models/`. An earlier single-file attempt was removed.
 - Project scaffold created: `models/`, `centralized/`, `federated/` (renamed from `fl/`), plus stub
   `utils/train.py` and `utils/dataset.py`. README and DATA_NOTES are up to date with the above.
 
 ### To do
-- Models: logistic regression and a small MLP in `models/nets.py` (PyTorch, so Flower, Opacus and the
-  attacks can reuse them). A first attempt was written and then removed at the user's request; the
-  scaffold (stub files) now exists, so fill it in without changing the layout unless asked.
 - Centralized baseline (`centralized/run.py`) on pooled training data, evaluated on the shared test set (pooled and per node).
 - FedAvg with Flower (`federated/`) across the 4 nodes (same model, same test set, local standardization).
 - Metrics: AUC-ROC primary; also accuracy, F1, precision, recall; pooled and per node; mean ± std

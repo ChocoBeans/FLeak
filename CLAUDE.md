@@ -14,11 +14,30 @@ updates (gradient inversion, membership inference) and what defenses (DP, secure
 ```bash
 source venv/bin/activate
 pip install -r requirements.txt
-python -m utils.preprocess      # downloads data on first run, writes data/processed/
+python -m utils.preprocess      # run from the repo root; downloads data on first run, writes data/processed/
 ```
 
 Python 3.11.4+ (developed on 3.12). First run needs internet (study archive ~136 MB, GENCODE v19
 annotation ~38 MB into `data/reference/`). `data/` and `results/` are gitignored.
+
+## Layout
+
+- `utils/preprocess.py` — download, join/filter, gene selection, splits, CSV export (`python -m utils.preprocess`).
+- `utils/standardization.py` — `standardize_pooled` / `standardize_local`.
+- `utils/train.py`, `utils/dataset.py` — shared training/evaluation and CSV reader (stubs, no code yet).
+- `models/nets.py` — logistic regression and small MLP (stub).
+- `centralized/run.py` — centralized baseline (stub).
+- `federated/{client,strategy,run}.py` — Flower client, FedAvg + per-client update hook, simulation (stubs).
+- `attacks/`, `notebooks/`, `results/` — empty so far. Results go to `results/centralized/` and `results/federated/`.
+- `data/` — raw study, GENCODE reference and `processed/` outputs (all gitignored).
+
+Dependency direction: `utils` <- `models` <- `centralized`, `federated`, `attacks`. `centralized` and
+`federated` must not import each other; both use the same `utils.train` and the same hyperparameters.
+Run modules from the repo root (`python -m centralized.run`, `python -m federated.run`).
+
+In code: `from utils.preprocess import load_cll, make_splits` and
+`from utils.standardization import standardize_pooled, standardize_local`. There is no reader for the
+`data/processed/` CSVs yet (`utils/dataset.py` is a stub); `load_cll` + `make_splits` give the same split.
 
 ## Status
 
@@ -35,14 +54,15 @@ annotation ~38 MB into `data/reference/`). `data/` and `results/` are gitignored
 - `standardize_pooled` (centralized) and `standardize_local` (federated) implemented in
   `utils/standardization.py`; applied at load time, not stored in the CSVs (which hold unscaled
   log2(TPM+1) values).
-- README and DATA_NOTES are up to date with the above.
+- Project scaffold created: `models/`, `centralized/`, `federated/` (renamed from `fl/`), plus stub
+  `utils/train.py` and `utils/dataset.py`. README and DATA_NOTES are up to date with the above.
 
 ### To do
-- Models: logistic regression and a small MLP (PyTorch, so Flower, Opacus and the attacks can reuse
-  them). A first attempt was written and then removed at the user's request; the empty `models/`
-  folder is theirs. Agree on layout with the user before rebuilding.
-- Centralized baseline on pooled training data, evaluated on the shared test set (pooled and per node).
-- FedAvg with Flower across the 4 nodes (same model, same test set, local standardization).
+- Models: logistic regression and a small MLP in `models/nets.py` (PyTorch, so Flower, Opacus and the
+  attacks can reuse them). A first attempt was written and then removed at the user's request; the
+  scaffold (stub files) now exists, so fill it in without changing the layout unless asked.
+- Centralized baseline (`centralized/run.py`) on pooled training data, evaluated on the shared test set (pooled and per node).
+- FedAvg with Flower (`federated/`) across the 4 nodes (same model, same test set, local standardization).
 - Metrics: AUC-ROC primary; also accuracy, F1, precision, recall; pooled and per node; mean ± std
   over seeds.
 - Attacks in `attacks/`: gradient inversion (cosine similarity of reconstruction) and membership

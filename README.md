@@ -82,10 +82,19 @@ FLeak/
 │   └── processed/        # samples_joined.csv, test.csv, nodes/<node>/{train,val}.csv
 ├── utils/
 │   ├── preprocess.py     # download/load raw files, join/filter, gene selection, patient-level splits
-│   └── standardization.py  # pooled (centralized) and local (federated) z-scoring from training data
-├── fl/          # Flower client/server code
+│   ├── standardization.py  # pooled (centralized) and local (federated) z-scoring from training data
+│   ├── train.py          # shared training epoch and evaluation (stub)
+│   └── dataset.py        # reads data/processed/ into arrays (stub)
+├── models/
+│   └── nets.py           # logistic regression and small MLP, shared by both runs (stub)
+├── centralized/
+│   └── run.py            # centralized baseline on pooled training data (stub)
+├── federated/
+│   ├── client.py         # Flower client (stub)
+│   ├── strategy.py       # FedAvg and the hook exposing per-client updates to the attacks (stub)
+│   └── run.py            # simulation across the 4 nodes (stub)
 ├── attacks/     # gradient inversion and membership inference attack implementations
-├── results/     # metrics output (CSV, gitignored)
+├── results/     # metrics output (CSV, gitignored); centralized/ and federated/ subfolders
 ├── notebooks/   # exploratory analysis
 ├── DATA_NOTES.txt  # data selection and preprocessing decisions, with reasoning
 ├── requirements.txt

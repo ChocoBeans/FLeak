@@ -83,8 +83,8 @@ FLeak/
 ├── utils/
 │   ├── preprocess.py     # download/load raw files, join/filter, gene selection, patient-level splits
 │   ├── standardization.py  # pooled (centralized) and local (federated) z-scoring from training data
-│   ├── train.py          # shared training epoch and evaluation (stub)
-│   └── dataset.py        # reads data/processed/ into arrays (stub)
+│   ├── train.py          # shared training epoch and evaluation (AUC, accuracy, F1, precision, recall)
+│   └── dataset.py        # reads data/processed/ into arrays (load_processed)
 ├── models/
 │   ├── logistic_regression.py  # logistic regression (one linear layer, outputs a logit)
 │   ├── mlp.py            # small MLP (100 -> 32 -> 1, outputs a logit)
@@ -93,9 +93,9 @@ FLeak/
 │   └── run.py            # centralized baseline on pooled training data (stub)
 ├── federated/
 │   ├── pyproject.toml    # Flower app config (imported from the quickstart-pytorch example)
-│   └── task.py, client_app.py, server_app.py, custom_strategy.py
-│                         # imported Flower quickstart example (CIFAR-10 CNN template, not yet adapted to CLL data);
-│                         # custom_strategy.py is kept for reference only
+│   └── client_app.py, server_app.py, custom_strategy.py
+│                         # imported Flower quickstart example (still import the removed CIFAR task.py, to be adapted
+│                         # to models/ and utils/); custom_strategy.py is kept for reference only
 ├── attacks/     # gradient inversion and membership inference attack implementations
 ├── results/     # metrics output (CSV, gitignored); centralized/ and federated/ subfolders
 ├── notebooks/   # exploratory analysis
@@ -140,7 +140,7 @@ test, nodes = standardize_pooled(test, nodes)          # centralized; or standar
 # nodes["ICGC"]["train"] -> (X, y); test -> (X, y, node_per_sample)
 ```
 
-There is no reader for the CSVs in `data/processed/` yet; they are the shareable copy of the same split (seed 4171).
+`utils.dataset.load_processed()` reads the CSVs in `data/processed/` into the same `(test, nodes)` layout (unscaled); it gives the same arrays as `load_cll` + `make_splits` (seed 4171). Use it with `standardize_pooled` / `standardize_local`.
 
 ## Research referenced
 
